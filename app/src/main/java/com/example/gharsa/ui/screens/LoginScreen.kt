@@ -31,7 +31,11 @@ import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LoginScreen(viewModel: AuthViewModel) {
+fun LoginScreen(
+    viewModel: AuthViewModel,
+    onNavigateToSignUp: () -> Unit,
+    onNavigateToMobileLogin: () -> Unit
+) {
     val scrollState = rememberScrollState()
 
     Scaffold(
@@ -41,22 +45,6 @@ fun LoginScreen(viewModel: AuthViewModel) {
                 navigationIcon = {
                     IconButton(onClick = { viewModel.showToast("Back navigation tapped") }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Navigate back")
-                    }
-                },
-                actions = {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.Person,
-                            contentDescription = "User Profile",
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(18.dp)
-                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -271,20 +259,6 @@ fun LoginScreen(viewModel: AuthViewModel) {
                         )
                     )
 
-                    Row(
-                        modifier = Modifier.padding(horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(14.dp))
-                        Text(
-                            text = if (viewModel.userRole == UserRole.RESIDENT) "Verified active resident account (Room 304, GreenLeaf PG)" else "Verified property manager account (GreenLeaf PG Hub)",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.secondary,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-
                     // Password Field
                     OutlinedTextField(
                         value = viewModel.password,
@@ -309,6 +283,23 @@ fun LoginScreen(viewModel: AuthViewModel) {
                         )
                     )
 
+                    // Login Error Message
+                    if (viewModel.loginError != null) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.errorContainer
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(Icons.Default.Error, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                                Text(text = viewModel.loginError!!, color = MaterialTheme.colorScheme.onErrorContainer, fontSize = 13.sp)
+                            }
+                        }
+                    }
+
                     // Remember Me & Forgot Password
                     Row(
                         modifier = Modifier
@@ -330,7 +321,7 @@ fun LoginScreen(viewModel: AuthViewModel) {
                             Text(text = "Remember login", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
 
-                        TextButton(onClick = { viewModel.showToast("Password reset link sent to registered phone/email.") }) {
+                        TextButton(onClick = { viewModel.showToast("Demo credentials: Use prefilled accounts or sign up!") }) {
                             Text(text = "Forgot Password?", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.secondary)
                         }
                     }
@@ -377,35 +368,22 @@ fun LoginScreen(viewModel: AuthViewModel) {
                     }
                 }
 
-                // Alternative Login Modalities
+                // Alternative Login Modalities (Login with OTP)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.Center
                 ) {
                     OutlinedButton(
-                        onClick = { viewModel.loginWithOtp() },
+                        onClick = onNavigateToMobileLogin,
                         modifier = Modifier
-                            .weight(1f)
+                            .fillMaxWidth()
                             .height(52.dp),
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest)
                     ) {
-                        Icon(Icons.Default.Sms, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(text = "Login with OTP", fontSize = 13.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
-                    }
-
-                    OutlinedButton(
-                        onClick = { viewModel.biometricLogin() },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(52.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest)
-                    ) {
-                        Icon(Icons.Default.Fingerprint, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.secondary)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(text = "Fingerprint ID", fontSize = 13.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
+                        Icon(Icons.Default.Sms, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = "Login with Mobile & OTP", fontSize = 14.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                     }
                 }
 
@@ -450,7 +428,7 @@ fun LoginScreen(viewModel: AuthViewModel) {
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Text(text = "Don't have an account yet?", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    TextButton(onClick = { viewModel.showToast("Redirecting to new hostel registration flow...") }) {
+                    TextButton(onClick = onNavigateToSignUp) {
                         Text(text = "Create Account", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.secondary)
                     }
                 }
@@ -507,7 +485,6 @@ fun LoginScreen(viewModel: AuthViewModel) {
                         }
                     }
 
-                    // Auto dismiss toast after delay
                     LaunchedEffect(msg) {
                         delay(3500)
                         viewModel.clearToast()
