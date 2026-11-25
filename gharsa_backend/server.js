@@ -12,7 +12,7 @@ const dbConfig = {
     host: 'localhost',
     port: 3306,
     user: 'root',
-    password: '',
+    password: 'WJ28@krhps',
     multipleStatements: true
 };
 
@@ -91,7 +91,7 @@ db.connect(err => {
 // 1. Login API (Email)
 app.post('/api/login', (req, res) => {
     const { email, password } = req.body;
-    db.query('USE gharsa_app_db;', () => {
+    db.query('USE gharsa_db;', () => {
         const query = 'SELECT * FROM users WHERE email = ? AND password = ?';
         db.query(query, [email, password], (err, results) => {
             if (err) return res.status(500).json({ error: err.message });
@@ -105,7 +105,7 @@ app.post('/api/login', (req, res) => {
 app.post('/api/signup', (req, res) => {
     const { name, email, password, role, roomNumber, mobile } = req.body;
     const cleanMobile = mobile ? mobile.trim() : '';
-    db.query('USE gharsa_app_db;', () => {
+    db.query('USE gharsa_db;', () => {
         const query = 'INSERT INTO users (name, email, password, role, roomNumber, mobile) VALUES (?, ?, ?, ?, ?, ?)';
         db.query(query, [name, email, password, role, roomNumber, cleanMobile], (err, result) => {
             if (err) {
@@ -135,7 +135,7 @@ app.post('/api/verify-otp', (req, res) => {
     const cleanMobile = mobile ? mobile.trim() : '';
     const cleanOtp = otp ? otp.trim() : '';
 
-    db.query('USE gharsa_app_db;', () => {
+    db.query('USE gharsa_db;', () => {
         if (cleanOtp !== "8421" && (!otpStore[cleanMobile] || otpStore[cleanMobile] !== cleanOtp)) {
             return res.status(401).json({ error: 'Invalid or expired OTP' });
         }
@@ -166,7 +166,7 @@ app.post('/api/verify-otp', (req, res) => {
 // 5. Update Profile API
 app.post('/api/profile/update', (req, res) => {
     const { email, name, mobile, roomNumber, password } = req.body;
-    db.query('USE gharsa_app_db;', () => {
+    db.query('USE gharsa_db;', () => {
         let query = 'UPDATE users SET name = ?, mobile = ?, roomNumber = ?';
         let params = [name, mobile, roomNumber];
         if (password && password.trim().length > 0) {
@@ -188,7 +188,7 @@ app.post('/api/profile/update', (req, res) => {
 
 // 6. Get Tickets API
 app.get('/api/tickets', (req, res) => {
-    db.query('USE gharsa_app_db;', () => {
+    db.query('USE gharsa_db;', () => {
         const query = 'SELECT * FROM tickets ORDER BY id DESC';
         db.query(query, (err, results) => {
             if (err) return res.status(500).json({ error: err.message });
@@ -200,7 +200,7 @@ app.get('/api/tickets', (req, res) => {
 // 7. Create Ticket API
 app.post('/api/tickets', (req, res) => {
     const { residentEmail, title, description, date } = req.body;
-    db.query('USE gharsa_app_db;', () => {
+    db.query('USE gharsa_db;', () => {
         const query = 'INSERT INTO tickets (residentEmail, title, description, status, date) VALUES (?, ?, ?, "IN_PROGRESS", ?)';
         db.query(query, [residentEmail, title, description, date], (err, result) => {
             if (err) return res.status(500).json({ error: err.message });
@@ -212,7 +212,7 @@ app.post('/api/tickets', (req, res) => {
 // 8. Get Rents API
 app.get('/api/rents', (req, res) => {
     const { email } = req.query;
-    db.query('USE gharsa_app_db;', () => {
+    db.query('USE gharsa_db;', () => {
         const query = 'SELECT * FROM rents WHERE residentEmail = ?';
         db.query(query, [email], (err, results) => {
             if (err) return res.status(500).json({ error: err.message });
@@ -224,7 +224,7 @@ app.get('/api/rents', (req, res) => {
 // 9. Pay Rent API
 app.post('/api/rents/pay', (req, res) => {
     const { rentId } = req.body;
-    db.query('USE gharsa_app_db;', () => {
+    db.query('USE gharsa_db;', () => {
         const query = 'UPDATE rents SET status = "PAID" WHERE id = ?';
         db.query(query, [rentId], (err, result) => {
             if (err) return res.status(500).json({ error: err.message });
