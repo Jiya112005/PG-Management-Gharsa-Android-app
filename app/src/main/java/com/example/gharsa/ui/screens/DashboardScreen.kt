@@ -1,6 +1,10 @@
 package com.example.gharsa.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -15,17 +19,28 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gharsa.viewmodel.AuthViewModel
 import com.example.gharsa.viewmodel.UserRole
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DashboardScreen(viewModel: AuthViewModel) {
+fun DashboardScreen(
+    viewModel: AuthViewModel,
+    onNavigateToProfile: () -> Unit,
+    onNavigateToTenantManagement: () -> Unit,
+    onNavigateToRoomManagement: () -> Unit
+) {
     val scrollState = rememberScrollState()
     val isResident = viewModel.userRole == UserRole.RESIDENT
+
+    var showTicketDialog by remember { mutableStateOf(false) }
+    var ticketTitle by remember { mutableStateOf("") }
+    var ticketDesc by remember { mutableStateOf("") }
 
     Scaffold(
         topBar = {
@@ -53,7 +68,7 @@ fun DashboardScreen(viewModel: AuthViewModel) {
                                 fontSize = 16.sp
                             )
                             Text(
-                                text = if (isResident) "GreenLeaf PG • Room 304" else "GreenLeaf PG Hub • 34 Beds",
+                                text = if (isResident) "GreenLeaf PG • Room ${viewModel.currentRoomNumber}" else "GreenLeaf PG Hub • ${viewModel.tenants.size} Residents",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -61,6 +76,9 @@ fun DashboardScreen(viewModel: AuthViewModel) {
                     }
                 },
                 actions = {
+                    IconButton(onClick = onNavigateToProfile) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit Profile", tint = MaterialTheme.colorScheme.primary)
+                    }
                     IconButton(onClick = { viewModel.logout() }) {
                         Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Logout", tint = MaterialTheme.colorScheme.error)
                     }
@@ -70,256 +88,422 @@ fun DashboardScreen(viewModel: AuthViewModel) {
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(scrollState)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Welcome Banner Card
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shadowElevation = 2.dp
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(20.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                // Welcome Banner Card
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shadowElevation = 2.dp
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = if (isResident) "Hello, Sneha Roy 👋" else "Hello, Rajesh Manager 👋",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = if (isResident) "Your rent is paid and stay is active until Nov 2026." else "All 32 active residents checked-in. 2 beds vacant.",
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.secondary),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        modifier = Modifier.padding(20.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Icon(
-                            if (isResident) Icons.Default.Verified else Icons.AutoMirrored.Filled.TrendingUp,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSecondary,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Hello, ${viewModel.currentUserName} 👋",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = if (isResident) "Your room stay is active in Room ${viewModel.currentRoomNumber}." else "${viewModel.tenants.size} tenants registered • ${viewModel.rooms.size} rooms managed",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.secondary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                if (isResident) Icons.Default.Verified else Icons.AutoMirrored.Filled.TrendingUp,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSecondary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                }
+
+                if (isResident) {
+                    // Resident Dash Content
+                    // Rent Card
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        shadowElevation = 1.dp
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Icon(Icons.Default.Payment, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    Text(text = "Monthly Rent Status", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                                }
+                                val rent = viewModel.rents.firstOrNull()
+                                val isPaid = rent?.status == "PAID"
+                                Surface(shape = CircleShape, color = if (isPaid) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.errorContainer) {
+                                    Text(
+                                        text = rent?.status ?: "DUE",
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isPaid) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(text = "₹8,500 / month (Includes Wi-Fi, Water & Electricity)", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            val rent = viewModel.rents.firstOrNull()
+                            if (rent != null && rent.status != "PAID") {
+                                Button(
+                                    onClick = { viewModel.payRent(rent.id) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                                ) {
+                                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondary, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(text = "Pay Rent ₹8,500 Now", color = MaterialTheme.colorScheme.onSecondary)
+                                }
+                            } else {
+                                Button(
+                                    onClick = { viewModel.showToast("Fee receipt downloaded successfully.") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                                ) {
+                                    Icon(Icons.Default.Download, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(text = "Download Fee Receipt", color = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        }
+                    }
+
+                    // Room & Roommates Card
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onNavigateToRoomManagement() },
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        shadowElevation = 1.dp
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Icon(Icons.Default.Bed, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    Text(text = "My Room & Roommates", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                                }
+                                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(text = "Room ${viewModel.currentRoomNumber} • GreenLeaf PG", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+
+                    // Maintenance Tickets Card
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        shadowElevation = 1.dp
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Icon(Icons.Default.Build, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    Text(text = "Maintenance Tickets", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                                }
+                                TextButton(onClick = { showTicketDialog = true }) {
+                                    Text(text = "+ Raise Ticket", color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            if (viewModel.tickets.isEmpty()) {
+                                Text(text = "No maintenance tickets raised yet.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
+                            } else {
+                                viewModel.tickets.forEachIndexed { index, ticket ->
+                                    ListItem(
+                                        headlineContent = { Text(ticket.title) },
+                                        supportingContent = { Text("${ticket.description} • ${ticket.date}") },
+                                        trailingContent = {
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = if (ticket.status == "RESOLVED") MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.tertiaryContainer
+                                            ) {
+                                                Text(
+                                                    ticket.status,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (ticket.status == "RESOLVED") MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onTertiaryContainer
+                                                )
+                                            }
+                                        }
+                                    )
+                                    if (index < viewModel.tickets.size - 1) {
+                                        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceContainerHigh)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                } else {
+                    // Manager Dash Content
+                    // Admin Modules Grid
+                    Text(
+                        text = "Admin Property Modules",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // Tenant Management Module Card
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { onNavigateToTenantManagement() },
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                            shadowElevation = 2.dp
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.primaryContainer),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.People, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+                                }
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(text = "Tenant Management", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Text(
+                                    text = "${viewModel.tenants.size} Active Tenants • Search, Add, Edit",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(text = "Manage Tenants", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                    Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        }
+
+                        // Room & Bed Management Module Card
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { onNavigateToRoomManagement() },
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                            shadowElevation = 2.dp
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.secondaryContainer),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.Bed, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondary)
+                                }
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(text = "Rooms & Beds", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Text(
+                                    text = "${viewModel.rooms.size} Rooms • Bed Occupancy & Slots",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(text = "Manage Rooms", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+                                    Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.secondary)
+                                }
+                            }
+                        }
+                    }
+
+                    // Metrics Overview
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Surface(
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                            shadowElevation = 1.dp
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(text = "Occupancy Rate", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(text = "92%", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                Text(text = "${viewModel.tenants.size} Residents Enrolled", fontSize = 11.sp, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Medium)
+                            }
+                        }
+
+                        Surface(
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                            shadowElevation = 1.dp
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(text = "Monthly Revenue", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(text = "₹2.75L", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                Text(text = "Rent Dues Tracked", fontSize = 11.sp, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                    }
+
+                    // Recent Tenants Card
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        shadowElevation = 1.dp
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = "Active Tenant Directory", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                                TextButton(onClick = onNavigateToTenantManagement) {
+                                    Text("View All (${viewModel.tenants.size})")
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            viewModel.tenants.take(3).forEachIndexed { index, tenant ->
+                                ListItem(
+                                    modifier = Modifier.clickable { onNavigateToTenantManagement() },
+                                    headlineContent = { Text("${tenant.name} (Room ${tenant.roomNumber})") },
+                                    supportingContent = { Text("Phone: ${tenant.mobile} • ${tenant.status}") },
+                                    trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null) }
+                                )
+                                if (index < viewModel.tenants.take(3).size - 1) {
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceContainerHigh)
+                                }
+                            }
+                        }
                     }
                 }
             }
 
-            if (isResident) {
-                // Resident Dash Content
-                // Rent Card
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                    shadowElevation = 1.dp
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Icon(Icons.Default.Payment, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                Text(text = "Monthly Rent Status", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                            }
-                            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer) {
-                                Text(
-                                    text = "PAID",
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
-                            }
+            // Raise Ticket Dialog
+            if (showTicketDialog) {
+                AlertDialog(
+                    onDismissRequest = { showTicketDialog = false },
+                    title = { Text("Raise Maintenance Ticket") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = ticketTitle,
+                                onValueChange = { ticketTitle = it },
+                                label = { Text("Issue Title (e.g. Water Leakage)") },
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = ticketDesc,
+                                onValueChange = { ticketDesc = it },
+                                label = { Text("Description") }
+                            )
                         }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(text = "₹8,500 / month (Includes Wi-Fi, Water & Electricity)", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(modifier = Modifier.height(12.dp))
+                    },
+                    confirmButton = {
                         Button(
-                            onClick = { viewModel.showToast("Downloading October 2026 Rent Receipt...") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                            onClick = {
+                                if (ticketTitle.isNotBlank() && ticketDesc.isNotBlank()) {
+                                    viewModel.raiseTicket(ticketTitle, ticketDesc)
+                                    ticketTitle = ""
+                                    ticketDesc = ""
+                                    showTicketDialog = false
+                                }
+                            }
                         ) {
-                            Icon(Icons.Default.Download, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = "Download Fee Receipt", color = MaterialTheme.colorScheme.primary)
+                            Text("Submit Ticket")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showTicketDialog = false }) {
+                            Text("Cancel")
                         }
                     }
-                }
+                )
+            }
 
-                // Maintenance Tickets Card
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                    shadowElevation = 1.dp
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Icon(Icons.Default.Build, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                Text(text = "Maintenance Tickets", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                            }
-                            TextButton(onClick = { viewModel.showToast("Opening ticket submission form...") }) {
-                                Text(text = "+ Raise Ticket", color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        ListItem(
-                            headlineContent = { Text("AC Filter Cleaning (#304)") },
-                            supportingContent = { Text("Resolved yesterday by Warden Ramesh") },
-                            trailingContent = {
-                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer) {
-                                    Text("RESOLVED", modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                                }
-                            }
-                        )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceContainerHigh)
-                        ListItem(
-                            headlineContent = { Text("Study Table Lamp Replacement") },
-                            supportingContent = { Text("Assigned to Electrician • In Progress") },
-                            trailingContent = {
-                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.tertiaryContainer) {
-                                    Text("IN PROGRESS", modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onTertiaryContainer)
-                                }
-                            }
-                        )
-                    }
-                }
-
-                // Mess Menu Card
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                    shadowElevation = 1.dp
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(Icons.Default.Restaurant, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Text(text = "Today's Mess Menu", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                        }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(text = "🥞 Breakfast (7:30 AM - 10:00 AM): Idli Sambar, Filter Coffee, Boiled Eggs", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(text = "🍛 Lunch (12:30 PM - 2:30 PM): Paneer Butter Masala, Chapati, Dal Fry, Rice", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(text = "🍲 Dinner (8:00 PM - 10:00 PM): Chicken Curry / Veg Kadai, Roti, Kheer", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-
-            } else {
-                // Manager Dash Content
-                // Metrics Overview
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Toast Snackbar Overlay
+            AnimatedVisibility(
+                visible = viewModel.toastMessage != null,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp),
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                viewModel.toastMessage?.let { msg ->
                     Surface(
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                        shadowElevation = 1.dp
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.inverseSurface,
+                        shadowElevation = 8.dp
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(text = "Occupancy Rate", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(text = "94%", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                            Text(text = "32 / 34 Beds Filled", fontSize = 11.sp, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Medium)
-                        }
-                    }
-
-                    Surface(
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                        shadowElevation = 1.dp
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(text = "Monthly Revenue", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(text = "₹2.72L", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                            Text(text = "2 Dues Pending", fontSize = 11.sp, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Medium)
-                        }
-                    }
-                }
-
-                // Quick Management Actions
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                    shadowElevation = 1.dp
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(text = "Property Operations", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = { viewModel.showToast("Opening Add New Tenant Wizard...") },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.weight(1f)
                             ) {
-                                Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = "Add Tenant", fontSize = 12.sp)
+                                Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(18.dp))
+                                Text(text = msg, color = MaterialTheme.colorScheme.inverseOnSurface, fontSize = 13.sp)
                             }
-                            OutlinedButton(
-                                onClick = { viewModel.showToast("Recording bulk rent collection...") },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(Icons.Default.Receipt, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = "Collect Dues", fontSize = 12.sp)
+                            TextButton(onClick = { viewModel.clearToast() }) {
+                                Text(text = "DISMISS", color = MaterialTheme.colorScheme.secondaryContainer, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
-                }
 
-                // Tenant List Card
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                    shadowElevation = 1.dp
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(text = "Recent Tenant Check-ins", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        ListItem(
-                            headlineContent = { Text("Sneha Roy (Room 304)") },
-                            supportingContent = { Text("Lease active • Paid ₹8,500") },
-                            trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null) }
-                        )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceContainerHigh)
-                        ListItem(
-                            headlineContent = { Text("Rahul Sharma (Room 201)") },
-                            supportingContent = { Text("Lease active • Paid ₹8,000") },
-                            trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null) }
-                        )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceContainerHigh)
-                        ListItem(
-                            headlineContent = { Text("Ananya Patel (Room 105)") },
-                            supportingContent = { Text("Pending Dues • ₹8,500") },
-                            trailingContent = {
-                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.errorContainer) {
-                                    Text("DUE", modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onErrorContainer)
-                                }
-                            }
-                        )
+                    LaunchedEffect(msg) {
+                        delay(3500)
+                        viewModel.clearToast()
                     }
                 }
             }
