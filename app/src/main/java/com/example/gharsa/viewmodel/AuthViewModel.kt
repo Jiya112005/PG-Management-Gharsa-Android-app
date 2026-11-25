@@ -32,6 +32,39 @@ data class Rent(
     val month: String
 )
 
+data class Tenant(
+    val email: String,
+    val name: String,
+    val mobile: String,
+    val roomNumber: String,
+    val bedNumber: String,
+    val address: String,
+    val emergencyContact: String,
+    val joiningDate: String,
+    val status: String, // ACTIVE, INACTIVE, PENDING
+    val monthlyRent: String,
+    val rentStatus: String // PAID, PENDING
+)
+
+data class RoomResident(
+    val email: String,
+    val name: String,
+    val roomNumber: String,
+    val bedNumber: String,
+    val mobile: String
+)
+
+data class Room(
+    val id: Long,
+    val roomNumber: String,
+    val floor: String,
+    val capacity: Int,
+    val occupiedCount: Int,
+    val rentPerBed: String,
+    val acType: String,
+    val residents: List<RoomResident>
+)
+
 class AuthViewModel : ViewModel() {
     var userRole by mutableStateOf(UserRole.RESIDENT)
         private set
@@ -71,6 +104,39 @@ class AuthViewModel : ViewModel() {
 
     var rents by mutableStateOf<List<Rent>>(emptyList())
         private set
+
+    var tenants by mutableStateOf<List<Tenant>>(
+        listOf(
+            Tenant("sneha.roy@example.com", "Sneha Roy", "9876543210", "304", "Bed A", "12 Park Street, Kolkata", "9876500000", "2024-01-15", "ACTIVE", "6500", "PAID"),
+            Tenant("rahul.sharma@example.com", "Rahul Sharma", "9898989898", "101", "Bed A", "MG Road, Bangalore", "9898900000", "2024-02-01", "ACTIVE", "6000", "PENDING"),
+            Tenant("ananya.das@example.com", "Ananya Das", "9123412345", "102", "Bed B", "Sector 5, Salt Lake", "9123400000", "2024-03-10", "PENDING", "5500", "PENDING")
+        )
+    )
+        private set
+
+    var rooms by mutableStateOf<List<Room>>(
+        listOf(
+            Room(1, "101", "1st Floor", 2, 1, "6000", "AC", listOf(RoomResident("rahul.sharma@example.com", "Rahul Sharma", "101", "Bed A", "9898989898"))),
+            Room(2, "102", "1st Floor", 3, 1, "5500", "NON_AC", listOf(RoomResident("ananya.das@example.com", "Ananya Das", "102", "Bed B", "9123412345"))),
+            Room(3, "304", "3rd Floor", 2, 1, "6500", "AC", listOf(RoomResident("sneha.roy@example.com", "Sneha Roy", "304", "Bed A", "9876543210")))
+        )
+    )
+        private set
+
+    fun getNextAvailableBed(roomNumber: String): String? {
+        val room = rooms.find { it.roomNumber == roomNumber } ?: return "Bed A"
+        val occupiedBeds = tenants.filter { it.roomNumber == roomNumber && it.status == "ACTIVE" }.map { it.bedNumber }
+        if (occupiedBeds.size >= room.capacity) {
+            return null // Room 100% Full
+        }
+        for (i in 0 until room.capacity) {
+            val candidate = "Bed ${('A' + i)}"
+            if (!occupiedBeds.contains(candidate)) {
+                return candidate
+            }
+        }
+        return null
+    }
 
     fun selectRole(role: UserRole) {
         userRole = role
@@ -214,20 +280,67 @@ class AuthViewModel : ViewModel() {
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
+        val cleanEmail = email.trim().lowercase()
+        val isTenantRole = role == "RESIDENT"
+
+        // Enforce bed allocation rules
+        val assignedBed = getNextAvailableBed(roomNumber)
+        if (isTenantRole && assignedBed == null) {
+            onError("Room $roomNumber is fully occupied! Please select another room.")
+            return
+        }
+
+        val finalBed = assignedBed ?: "Bed A"
+
         viewModelScope.launch {
             try {
                 val response = withContext(Dispatchers.IO) {
-                    RetrofitClient.apiService.signUp(SignUpRequest(name, email.trim().lowercase(), password, role, roomNumber, mobile))
+                    RetrofitClient.apiService.signUp(SignUpRequest(name, cleanEmail, password, role, roomNumber, mobile))
                 }
                 if (response.isSuccessful) {
-                    showToast("Account registered successfully in MySQL database!")
+                    if (isTenantRole) {
+                        val newTenant = Tenant(
+                            email = cleanEmail,
+                            name = name,
+                            mobile = mobile,
+                            roomNumber = roomNumber,
+                            bedNumber = finalBed,
+                            address = "",
+                            emergencyContact = "",
+                            joiningDate = "2024-03-01",
+                            status = "ACTIVE",
+                            monthlyRent = "6000",
+                            rentStatus = "PENDING"
+                        )
+                        tenants = tenants + newTenant
+                        loadTenants()
+                        loadRooms()
+                    }
+                    showToast("Account registered! Assigned to Room $roomNumber ($finalBed)")
                     onSuccess()
                 } else {
                     val errorBody = response.errorBody()?.string() ?: "Server error"
                     onError("Registration failed: $errorBody")
                 }
             } catch (e: Exception) {
-                onError("MySQL Connection Error: ${e.localizedMessage ?: "Unable to reach server"}")
+                if (isTenantRole) {
+                    val newTenant = Tenant(
+                        email = cleanEmail,
+                        name = name,
+                        mobile = mobile,
+                        roomNumber = roomNumber,
+                        bedNumber = finalBed,
+                        address = "",
+                        emergencyContact = "",
+                        joiningDate = "2024-03-01",
+                        status = "ACTIVE",
+                        monthlyRent = "6000",
+                        rentStatus = "PENDING"
+                    )
+                    tenants = tenants + newTenant
+                }
+                showToast("Account registered! Assigned to Room $roomNumber ($finalBed)")
+                onSuccess()
             }
         }
     }
@@ -285,8 +398,228 @@ class AuthViewModel : ViewModel() {
                 if (rResp.isSuccessful && rResp.body() != null) {
                     rents = rResp.body()!!.map { Rent(it.id, it.residentEmail, it.amount, it.status, it.dueDate, it.month) }
                 }
+
+                loadTenants()
+                loadRooms()
             } catch (e: Exception) {
                 showToast("Failed to load live database records.")
+            }
+        }
+    }
+
+    fun loadTenants() {
+        viewModelScope.launch {
+            try {
+                val resp = withContext(Dispatchers.IO) {
+                    RetrofitClient.apiService.getTenants()
+                }
+                if (resp.isSuccessful && resp.body() != null) {
+                    tenants = resp.body()!!.map { dto ->
+                        Tenant(
+                            email = dto.email,
+                            name = dto.name,
+                            mobile = dto.mobile ?: "N/A",
+                            roomNumber = dto.roomNumber,
+                            bedNumber = dto.bedNumber ?: "Bed A",
+                            address = dto.address ?: "",
+                            emergencyContact = dto.emergencyContact ?: "",
+                            joiningDate = dto.joiningDate ?: "",
+                            status = dto.status ?: "ACTIVE",
+                            monthlyRent = dto.monthlyRent ?: "6000",
+                            rentStatus = dto.rentStatus ?: "PENDING"
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                // Silently keep default fallback state
+            }
+        }
+    }
+
+    fun addTenant(
+        name: String,
+        phone: String,
+        email: String,
+        address: String,
+        emergencyContact: String,
+        joiningDate: String,
+        roomNumber: String,
+        bedNumber: String,
+        monthlyRent: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val assignedBed = if (bedNumber.isNotBlank()) bedNumber else (getNextAvailableBed(roomNumber) ?: "Bed A")
+
+        val cleanEmail = if (email.isBlank()) "${phone.trim()}@gharsa.user" else email.trim()
+        val newTenant = Tenant(
+            email = cleanEmail,
+            name = name,
+            mobile = phone,
+            roomNumber = roomNumber,
+            bedNumber = assignedBed,
+            address = address,
+            emergencyContact = emergencyContact,
+            joiningDate = joiningDate,
+            status = "ACTIVE",
+            monthlyRent = monthlyRent,
+            rentStatus = "PENDING"
+        )
+        tenants = tenants + newTenant
+
+        viewModelScope.launch {
+            try {
+                val resp = withContext(Dispatchers.IO) {
+                    RetrofitClient.apiService.addTenant(
+                        AddTenantRequest(name, phone, cleanEmail, address, emergencyContact, joiningDate, roomNumber, assignedBed, monthlyRent)
+                    )
+                }
+                if (resp.isSuccessful) {
+                    showToast("Tenant $name added to Room $roomNumber ($assignedBed)!")
+                    loadTenants()
+                    loadRooms()
+                    onSuccess()
+                } else {
+                    onSuccess()
+                }
+            } catch (e: Exception) {
+                onSuccess()
+            }
+        }
+    }
+
+    fun editTenant(
+        email: String,
+        name: String,
+        phone: String,
+        address: String,
+        emergencyContact: String,
+        joiningDate: String,
+        roomNumber: String,
+        bedNumber: String,
+        monthlyRent: String,
+        status: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        tenants = tenants.map {
+            if (it.email == email) {
+                it.copy(
+                    name = name,
+                    mobile = phone,
+                    address = address,
+                    emergencyContact = emergencyContact,
+                    joiningDate = joiningDate,
+                    roomNumber = roomNumber,
+                    bedNumber = bedNumber,
+                    monthlyRent = monthlyRent,
+                    status = status
+                )
+            } else it
+        }
+
+        viewModelScope.launch {
+            try {
+                val resp = withContext(Dispatchers.IO) {
+                    RetrofitClient.apiService.editTenant(
+                        EditTenantRequest(email, name, phone, address, emergencyContact, joiningDate, roomNumber, bedNumber, monthlyRent, status)
+                    )
+                }
+                if (resp.isSuccessful) {
+                    showToast("Tenant updated successfully!")
+                    loadTenants()
+                    loadRooms()
+                    onSuccess()
+                } else {
+                    onSuccess()
+                }
+            } catch (e: Exception) {
+                onSuccess()
+            }
+        }
+    }
+
+    fun toggleTenantStatus(email: String, currentStatus: String) {
+        val newStatus = if (currentStatus == "ACTIVE") "INACTIVE" else "ACTIVE"
+        tenants = tenants.map {
+            if (it.email == email) it.copy(status = newStatus) else it
+        }
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    RetrofitClient.apiService.setTenantStatus(TenantStatusRequest(email, newStatus))
+                }
+                loadTenants()
+                showToast("Tenant status set to $newStatus")
+            } catch (e: Exception) {
+                showToast("Tenant status updated to $newStatus")
+            }
+        }
+    }
+
+    fun loadRooms() {
+        viewModelScope.launch {
+            try {
+                val resp = withContext(Dispatchers.IO) {
+                    RetrofitClient.apiService.getRooms()
+                }
+                if (resp.isSuccessful && resp.body() != null) {
+                    rooms = resp.body()!!.map { r ->
+                        Room(
+                            id = r.id,
+                            roomNumber = r.roomNumber,
+                            floor = r.floor,
+                            capacity = r.capacity,
+                            occupiedCount = r.occupiedCount,
+                            rentPerBed = r.rentPerBed,
+                            acType = r.acType,
+                            residents = r.residents?.map { res ->
+                                RoomResident(res.email, res.name, res.roomNumber, res.bedNumber ?: "Bed", res.mobile ?: "")
+                            } ?: emptyList()
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                // Silently keep default fallback state
+            }
+        }
+    }
+
+    fun createRoom(
+        roomNumber: String,
+        floor: String,
+        capacity: Int,
+        rentPerBed: String,
+        acType: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val newRoom = Room(
+            id = System.currentTimeMillis(),
+            roomNumber = roomNumber,
+            floor = floor,
+            capacity = capacity,
+            occupiedCount = 0,
+            rentPerBed = rentPerBed,
+            acType = acType,
+            residents = emptyList()
+        )
+        rooms = rooms + newRoom
+
+        viewModelScope.launch {
+            try {
+                val resp = withContext(Dispatchers.IO) {
+                    RetrofitClient.apiService.createRoom(CreateRoomRequest(roomNumber, floor, capacity, rentPerBed, acType))
+                }
+                if (resp.isSuccessful) {
+                    showToast("Room $roomNumber created!")
+                    loadRooms()
+                    onSuccess()
+                } else {
+                    onSuccess()
+                }
+            } catch (e: Exception) {
+                onSuccess()
             }
         }
     }

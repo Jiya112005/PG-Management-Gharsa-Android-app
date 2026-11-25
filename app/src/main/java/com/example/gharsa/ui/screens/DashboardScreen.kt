@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -18,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,7 +29,12 @@ import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DashboardScreen(viewModel: AuthViewModel, onNavigateToProfile: () -> Unit) {
+fun DashboardScreen(
+    viewModel: AuthViewModel,
+    onNavigateToProfile: () -> Unit,
+    onNavigateToTenantManagement: () -> Unit,
+    onNavigateToRoomManagement: () -> Unit
+) {
     val scrollState = rememberScrollState()
     val isResident = viewModel.userRole == UserRole.RESIDENT
 
@@ -61,7 +68,7 @@ fun DashboardScreen(viewModel: AuthViewModel, onNavigateToProfile: () -> Unit) {
                                 fontSize = 16.sp
                             )
                             Text(
-                                text = if (isResident) "GreenLeaf PG • Room ${viewModel.currentRoomNumber}" else "GreenLeaf PG Hub • 34 Beds",
+                                text = if (isResident) "GreenLeaf PG • Room ${viewModel.currentRoomNumber}" else "GreenLeaf PG Hub • ${viewModel.tenants.size} Residents",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -114,7 +121,7 @@ fun DashboardScreen(viewModel: AuthViewModel, onNavigateToProfile: () -> Unit) {
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = if (isResident) "Your room stay is active in Room ${viewModel.currentRoomNumber}." else "All 32 active residents checked-in. 2 beds vacant.",
+                                text = if (isResident) "Your room stay is active in Room ${viewModel.currentRoomNumber}." else "${viewModel.tenants.size} tenants registered • ${viewModel.rooms.size} rooms managed",
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
@@ -193,6 +200,32 @@ fun DashboardScreen(viewModel: AuthViewModel, onNavigateToProfile: () -> Unit) {
                         }
                     }
 
+                    // Room & Roommates Card
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onNavigateToRoomManagement() },
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        shadowElevation = 1.dp
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Icon(Icons.Default.Bed, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    Text(text = "My Room & Roommates", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                                }
+                                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(text = "Room ${viewModel.currentRoomNumber} • GreenLeaf PG", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+
                     // Maintenance Tickets Card
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
@@ -242,29 +275,89 @@ fun DashboardScreen(viewModel: AuthViewModel, onNavigateToProfile: () -> Unit) {
                         }
                     }
 
-                    // Mess Menu Card
-                    Surface(
+                } else {
+                    // Manager Dash Content
+                    // Admin Modules Grid
+                    Text(
+                        text = "Admin Property Modules",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                        shadowElevation = 1.dp
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Icon(Icons.Default.Restaurant, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                Text(text = "Today's Mess Menu", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                        // Tenant Management Module Card
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { onNavigateToTenantManagement() },
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                            shadowElevation = 2.dp
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.primaryContainer),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.People, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+                                }
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(text = "Tenant Management", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Text(
+                                    text = "${viewModel.tenants.size} Active Tenants • Search, Add, Edit",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(text = "Manage Tenants", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                    Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                                }
                             }
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(text = "🥞 Breakfast (7:30 AM - 10:00 AM): Idli Sambar, Filter Coffee, Boiled Eggs", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(text = "🍛 Lunch (12:30 PM - 2:30 PM): Paneer Butter Masala, Chapati, Dal Fry, Rice", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(text = "🍲 Dinner (8:00 PM - 10:00 PM): Chicken Curry / Veg Kadai, Roti, Kheer", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+
+                        // Room & Bed Management Module Card
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { onNavigateToRoomManagement() },
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                            shadowElevation = 2.dp
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.secondaryContainer),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.Bed, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondary)
+                                }
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(text = "Rooms & Beds", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Text(
+                                    text = "${viewModel.rooms.size} Rooms • Bed Occupancy & Slots",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(text = "Manage Rooms", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+                                    Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.secondary)
+                                }
+                            }
                         }
                     }
 
-                } else {
-                    // Manager Dash Content
                     // Metrics Overview
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Surface(
@@ -276,8 +369,8 @@ fun DashboardScreen(viewModel: AuthViewModel, onNavigateToProfile: () -> Unit) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(text = "Occupancy Rate", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Text(text = "94%", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                Text(text = "32 / 34 Beds Filled", fontSize = 11.sp, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Medium)
+                                Text(text = "92%", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                Text(text = "${viewModel.tenants.size} Residents Enrolled", fontSize = 11.sp, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Medium)
                             }
                         }
 
@@ -290,13 +383,13 @@ fun DashboardScreen(viewModel: AuthViewModel, onNavigateToProfile: () -> Unit) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(text = "Monthly Revenue", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Text(text = "₹2.72L", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                Text(text = "All Dues Cleared", fontSize = 11.sp, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Medium)
+                                Text(text = "₹2.75L", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                Text(text = "Rent Dues Tracked", fontSize = 11.sp, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Medium)
                             }
                         }
                     }
 
-                    // Quick Management Actions
+                    // Recent Tenants Card
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
@@ -304,52 +397,29 @@ fun DashboardScreen(viewModel: AuthViewModel, onNavigateToProfile: () -> Unit) {
                         shadowElevation = 1.dp
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Text(text = "Property Operations", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(
-                                    onClick = { viewModel.showToast("Opening Add New Tenant Wizard...") },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(text = "Add Tenant", fontSize = 12.sp)
-                                }
-                                OutlinedButton(
-                                    onClick = { viewModel.showToast("Recording bulk rent collection...") },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Icon(Icons.Default.Receipt, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(text = "Collect Dues", fontSize = 12.sp)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = "Active Tenant Directory", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                                TextButton(onClick = onNavigateToTenantManagement) {
+                                    Text("View All (${viewModel.tenants.size})")
                                 }
                             }
-                        }
-                    }
-
-                    // Tenant List Card
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                        shadowElevation = 1.dp
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(text = "Recent Tenant Check-ins", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                             Spacer(modifier = Modifier.height(8.dp))
-                            ListItem(
-                                headlineContent = { Text("${viewModel.currentUserName} (Room ${viewModel.currentRoomNumber})") },
-                                supportingContent = { Text("Lease active • Verified Resident") },
-                                trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null) }
-                            )
-                            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceContainerHigh)
-                            ListItem(
-                                headlineContent = { Text("Rahul Sharma (Room 201)") },
-                                supportingContent = { Text("Lease active • Paid ₹8,000") },
-                                trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null) }
-                            )
+
+                            viewModel.tenants.take(3).forEachIndexed { index, tenant ->
+                                ListItem(
+                                    modifier = Modifier.clickable { onNavigateToTenantManagement() },
+                                    headlineContent = { Text("${tenant.name} (Room ${tenant.roomNumber})") },
+                                    supportingContent = { Text("Phone: ${tenant.mobile} • ${tenant.status}") },
+                                    trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null) }
+                                )
+                                if (index < viewModel.tenants.take(3).size - 1) {
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceContainerHigh)
+                                }
+                            }
                         }
                     }
                 }

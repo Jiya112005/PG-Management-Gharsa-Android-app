@@ -13,12 +13,14 @@ import com.example.gharsa.ui.screens.DashboardScreen
 import com.example.gharsa.ui.screens.LoginScreen
 import com.example.gharsa.ui.screens.MobileLoginScreen
 import com.example.gharsa.ui.screens.ProfileScreen
+import com.example.gharsa.ui.screens.RoomManagementScreen
 import com.example.gharsa.ui.screens.SignUpScreen
+import com.example.gharsa.ui.screens.TenantManagementScreen
 import com.example.gharsa.ui.theme.GharSaTheme
 import com.example.gharsa.viewmodel.AuthViewModel
 
 enum class Screen {
-    LOGIN, SIGN_UP, MOBILE_LOGIN, PROFILE, DASHBOARD
+    LOGIN, SIGN_UP, MOBILE_LOGIN, PROFILE, DASHBOARD, TENANT_MANAGEMENT, ROOM_MANAGEMENT
 }
 
 class MainActivity : ComponentActivity() {
@@ -35,15 +37,24 @@ class MainActivity : ComponentActivity() {
                     var currentScreen by remember { mutableStateOf(Screen.LOGIN) }
 
                     if (authViewModel.isLoggedIn) {
-                        if (currentScreen == Screen.PROFILE) {
-                            ProfileScreen(
+                        when (currentScreen) {
+                            Screen.PROFILE -> ProfileScreen(
                                 viewModel = authViewModel,
                                 onBack = { currentScreen = Screen.DASHBOARD }
                             )
-                        } else {
-                            DashboardScreen(
+                            Screen.TENANT_MANAGEMENT -> TenantManagementScreen(
                                 viewModel = authViewModel,
-                                onNavigateToProfile = { currentScreen = Screen.PROFILE }
+                                onBack = { currentScreen = Screen.DASHBOARD }
+                            )
+                            Screen.ROOM_MANAGEMENT -> RoomManagementScreen(
+                                viewModel = authViewModel,
+                                onBack = { currentScreen = Screen.DASHBOARD }
+                            )
+                            else -> DashboardScreen(
+                                viewModel = authViewModel,
+                                onNavigateToProfile = { currentScreen = Screen.PROFILE },
+                                onNavigateToTenantManagement = { currentScreen = Screen.TENANT_MANAGEMENT },
+                                onNavigateToRoomManagement = { currentScreen = Screen.ROOM_MANAGEMENT }
                             )
                         }
                     } else {

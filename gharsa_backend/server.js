@@ -31,10 +31,10 @@ db.connect(err => {
     }
     console.log('✅ Connected to MySQL Server on port 3306 successfully!');
 
-    db.query('CREATE DATABASE IF NOT EXISTS gharsa_db;', (createErr) => {
+    db.query('CREATE DATABASE IF NOT EXISTS gharsa_app_db;', (createErr) => {
         if (createErr) return;
 
-        db.query('USE gharsa_db;', (useErr) => {
+        db.query('USE gharsa_app_db;', (useErr) => {
             if (useErr) return;
 
             db.query(`
@@ -229,6 +229,118 @@ app.post('/api/rents/pay', (req, res) => {
         db.query(query, [rentId], (err, result) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ success: true });
+        });
+    });
+});
+
+// 10. Get All Tenants (role = RESIDENT) API
+app.get('/api/tenants', (req, res) => {
+    db.query('USE gharsa_app_db;', () => {
+        const query = `
+            SELECT u.*,
+                   IFNULL(r.status, 'PENDING') AS rentStatus
+            FROM users u
+            LEFT JOIN rents r ON u.email = r.residentEmail
+            WHERE u.role = 'RESIDENT'
+            ORDER BY u.name ASC
+        `;
+        db.query(query, (err, results) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json(results);
+        });
+    });
+});
+
+// 11. Add Tenant API
+app.post('/api/tenants/add', (req, res) => {
+    const { name, phone, email, address, emergencyContact, joiningDate, roomNumber, bedNumber, monthlyRent } = req.body;
+    const cleanEmail = email ? email.trim().lowercase() : `${phone}@gharsa.user`;
+    const defaultPassword = 'tenantPassword123';
+
+    db.query('USE gharsa_app_db;', () => {
+        const query = `
+            INSERT INTO users (email, password, name, role, roomNumber, mobile, address, emergencyContact, joiningDate, bedNumber, status, monthlyRent)
+            VALUES (?, ?, ?, 'RESIDENT', ?, ?, ?, ?, ?, ?, 'ACTIVE', ?)
+            ON DUPLICATE KEY UPDATE
+                name=VALUES(name), mobile=VALUES(mobile), roomNumber=VALUES(roomNumber),
+                address=VALUES(address), emergencyContact=VALUES(emergencyContact),
+                joiningDate=VALUES(joiningDate), bedNumber=VALUES(bedNumber), monthlyRent=VALUES(monthlyRent), status='ACTIVE'
+        `;
+        db.query(query, [cleanEmail, defaultPassword, name, roomNumber, phone, address || '', emergencyContact || '', joiningDate || '2024-03-01', bedNumber || 'Bed A', monthlyRent || '6000'], (err, result) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            db.query(`
+                INSERT INTO rents (residentEmail, amount, status, dueDate, month)
+                VALUES (?, ?, 'PENDING', '5th of Month', 'Current Month')
+            `, [cleanEmail, monthlyRent || '6000'], () => {});
+
+            res.json({ success: true, email: cleanEmail });
+        });
+    });
+});
+
+// 12. Edit Tenant API
+app.post('/api/tenants/edit', (req, res) => {
+    const { email, name, phone, address, emergencyContact, joiningDate, roomNumber, bedNumber, monthlyRent, status } = req.body;
+
+    db.query('USE gharsa_app_db;', () => {
+        const query = `
+            UPDATE users
+            SET name = ?, mobile = ?, address = ?, emergencyContact = ?, joiningDate = ?, roomNumber = ?, bedNumber = ?, monthlyRent = ?, status = ?
+            WHERE email = ?
+        `;
+        db.query(query, [name, phone, address, emergencyContact, joiningDate, roomNumber, bedNumber, monthlyRent, status || 'ACTIVE', email], (err, result) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true });
+        });
+    });
+});
+
+// 13. Set Tenant Status API
+app.post('/api/tenants/status', (req, res) => {
+    const { email, status } = req.body;
+    db.query('USE gharsa_app_db;', () => {
+        const query = 'UPDATE users SET status = ? WHERE email = ?';
+        db.query(query, [status, email], (err, result) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true, email, status });
+        });
+    });
+});
+
+// 14. Get Rooms API
+app.get('/api/rooms', (req, res) => {
+    db.query('USE gharsa_app_db;', () => {
+        const roomQuery = 'SELECT * FROM rooms ORDER BY roomNumber ASC';
+        db.query(roomQuery, (err, rooms) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            const userQuery = 'SELECT email, name, roomNumber, bedNumber, mobile FROM users WHERE role = "RESIDENT" AND status = "ACTIVE"';
+            db.query(userQuery, (uErr, users) => {
+                if (uErr) return res.status(500).json({ error: uErr.message });
+
+                const result = rooms.map(room => {
+                    const roomResidents = users.filter(u => u.roomNumber === room.roomNumber);
+                    return {
+                        ...room,
+                        occupiedCount: roomResidents.length,
+                        residents: roomResidents
+                    };
+                });
+                res.json(result);
+            });
+        });
+    });
+});
+
+// 15. Add Room API
+app.post('/api/rooms', (req, res) => {
+    const { roomNumber, floor, capacity, rentPerBed, acType } = req.body;
+    db.query('USE gharsa_app_db;', () => {
+        const query = 'INSERT INTO rooms (roomNumber, floor, capacity, rentPerBed, acType) VALUES (?, ?, ?, ?, ?)';
+        db.query(query, [roomNumber, floor, capacity, rentPerBed, acType || 'NON_AC'], (err, result) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ id: result.insertId, roomNumber, floor, capacity, rentPerBed, acType });
         });
     });
 });
